@@ -1,0 +1,7 @@
+data:
+    - id : 1
+      media_id : "1"
+      tag_id : "1"
+    - id : 2
+      media_id : "1"
+      tag_id : "2"

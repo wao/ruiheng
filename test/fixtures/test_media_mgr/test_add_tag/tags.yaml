@@ -1,0 +1,5 @@
+data:
+    - id: "1"
+      text: "tag1"
+    - id: "2"
+      text: "tag2"

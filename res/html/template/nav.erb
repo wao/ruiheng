@@ -1,0 +1,42 @@
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"><%= @years[@year].prompt%><span class="caret"></span></button>
+<ul class="dropdown-menu" role="menu">
+    <% @years.each_child do |year| %>
+        <% value = year.first_child.first_child.value %>
+        <% if year.value[:year] == @year %>
+            <li class="active"><a href="#"><%= year.prompt %></a></li>
+        <% else %>
+            <li><a href="<%= "%04d-%02d-%02d" % [ value[:year], value[:month], value[:day] ] %>.html"><%= year.prompt %></a></li>
+        <% end %>
+    <% end %>
+</ul>
+</div>
+
+
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"><%= @years[@year].children[@month].prompt%><span class="caret"></span></button>
+<ul class="dropdown-menu" role="menu">
+    <% year = @years[@year] %>
+    <% year.each_child do |month| %>
+        <% value = month.first_child.value %>
+        <% if month.value[:month] == @month %>
+            <li class="active"><a href="#"><%= month.prompt %></a></li>
+        <% else %>
+            <li><a href="<%= "%04d-%02d-%02d" % [ value[:year], value[:month], value[:day] ] %>.html"><%= month.prompt %></a></li>
+        <% end %>
+    <% end %>
+</ul>
+</div>
+
+<ul class="nav nav-pills">
+    <% month = year.children[@month] %>
+    <% month.each_child do |day| %>
+        <% value = day.value %>
+        <% if day.value[:day] == @day %>
+            <li class="active"><a href="<%= "%04d-%02d-%02d" % [ value[:year], value[:month], value[:day] ] %>.html"><%= day.prompt %></a></li>
+        <% else %>
+            <li><a href="<%= "%04d-%02d-%02d" % [ value[:year], value[:month], value[:day] ] %>.html"><%= day.prompt %></a></li>
+        <% end %>
+    <% end %>
+</ul>
+

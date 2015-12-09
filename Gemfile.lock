@@ -1,0 +1,71 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    arrayfields (4.9.2)
+    atk (3.0.7)
+      glib2 (= 3.0.7)
+    byebug (8.2.1)
+    cairo (1.14.3)
+      pkg-config (>= 1.1.5)
+    cairo-gobject (3.0.7)
+      cairo
+      glib2 (= 3.0.7)
+    chronic (0.10.2)
+    fattr (2.2.2)
+    gdk3 (3.0.7)
+      cairo-gobject (= 3.0.7)
+      gdk_pixbuf2 (= 3.0.7)
+      gobject-introspection (= 3.0.7)
+      pango (= 3.0.7)
+    gdk_pixbuf2 (3.0.7)
+      glib2 (= 3.0.7)
+    gio2 (3.0.7)
+      glib2 (= 3.0.7)
+      gobject-introspection (= 3.0.7)
+    glib2 (3.0.7)
+      pkg-config
+    gobject-introspection (3.0.7)
+      glib2 (= 3.0.7)
+    gtk3 (3.0.7)
+      atk (= 3.0.7)
+      gdk3 (= 3.0.7)
+      gdk_pixbuf2 (= 3.0.7)
+      gio2 (= 3.0.7)
+      glib2 (= 3.0.7)
+      gobject-introspection (= 3.0.7)
+      pango (= 3.0.7)
+    handshake (0.3.1)
+    main (6.2.0)
+      arrayfields (>= 4.7.4)
+      chronic (>= 0.6.2)
+      fattr (>= 2.2.0)
+      map (>= 6.1.0)
+    map (6.5.5)
+    mimemagic (0.3.0)
+    mini_exiftool (2.5.1)
+    pango (3.0.7)
+      cairo (>= 1.14.0)
+      glib2 (= 3.0.7)
+    pkg-config (1.1.6)
+    power_assert (0.2.6)
+    rmagick (2.15.4)
+    sequel (4.29.0)
+    test-unit (3.1.5)
+      power_assert
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  byebug
+  gtk3
+  handshake
+  main
+  mimemagic
+  mini_exiftool
+  rmagick
+  sequel
+  test-unit
+
+BUNDLED WITH
+   1.10.6

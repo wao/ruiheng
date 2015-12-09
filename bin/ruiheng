@@ -1,0 +1,604 @@
+#!/usr/bin/env ruby
+#vim:ft=ruby
+
+$:.push File.dirname( File.realpath( __FILE__ ) ) + "/../lib"
+
+require 'optparse'
+require 'find'
+require 'ruiheng/media_mgr'
+require 'json'
+require 'ui/gtk3/global'
+require 'storage/file_id'
+require 'ui/html/generator'
+
+require 'main'
+
+include Ruiheng
+
+RegSize = /(?<size>\d+)(M|m)/
+
+IMPORT_SUMMARY = <<__END__
+Summary:
+Id: %s
+Path: %s
+Total find %d files
+Add %d files to repo and db
+Add %d files to repo only
+Add %d files to db only
+%d files are not media
+%d files are thumbnail
+%d files are already in repo
+%d files caused error
+__END__
+
+Main do
+    RC_FILE_PATH = Dir.home + "/.ruiheng/config.json"
+
+    DefaultConfig = { :readonly=>false }
+
+    def initialize
+        @config = DefaultConfig.merge load_rc
+        @config[:local_repo] = File.expand_path( @config[:local_repo] ) if @config[:local_repo]
+    end
+
+    def load_rc
+        if File.exist? RC_FILE_PATH 
+            JSON.load( File.read( RC_FILE_PATH ), nil, {:symbolize_names=>true} )
+        else
+            {}
+        end
+    end
+
+    def ensure_repo_exist(path)
+        if !File.exist? path
+            puts "\"#{path}\" is not exists. Please use create \"#{path}\" to create it first"
+            exit
+            #puts "\"#{path}\" is not exists. Create it? [y/N]"
+            #result = $stdin.gets
+            #if result.chop == "y"
+            #FileUtils.mkdir_p path
+            #else
+            #exit
+            #end
+        end
+    end
+
+    def parse(args)
+        opt_parse = OptionParser.new do |opts|
+            opts.banner = "Usage: ruiheng [global options] command arguments"
+            opts.separator ""
+            opts.separator "Global options"
+            opts.on("-l", "--local [LOCAL REPO PATH]", "Local repo path. If not specified by config.json, it is needed to specified" ) do |path|
+                @config[:local_repo] = path
+                ensure_repo_exist(path)
+            end
+
+            opts.on("--dry-run", "Doesn't really modify repo") do 
+                @config[:readonly] = true
+            end
+
+
+            opts.separator ""
+            opts.separator "Common options"
+            opts.on("-h", "--help", "Print this message." ) do 
+                puts opts
+                puts "Support command: sync import check rebuild backup"
+                exit
+            end
+        end
+
+        opt_parse.parse!(args)
+
+        if args.empty?
+            puts opt_parse
+            puts "Support command: sync import check rebuild backup"
+            exit
+        end
+    end
+
+
+    def do_create(path)
+        if File.exist? path
+            puts "#{path} already exists!"
+            exit
+        end
+
+        FileUtils.mkdir_p path
+        local_mgr
+    end
+
+    def do_stat
+        s = local_mgr.stat
+        puts "total media files: #{s[:media_count]}"
+        puts "total checkin: #{s[:checkin_count]}"
+        puts "total albums: #{s[:album_count]}"
+    end
+
+    def do_html_generate
+        local_mgr.generate_html
+    end
+
+    def do_html_view
+        system( "firefox %s" % [ Dir[@config[:local_repo]+"/www/*.html"][0] ] )
+    end
+
+    def do_list_checkin
+        local_mgr.checkin.db.order(:time).reverse.each do |checkin|
+            puts "%s  %s     %s  [%d]" % [ checkin.id, checkin.time.strftime( "%Y/%m/%d %H:%M:%S" ), checkin.src_path, checkin.error_count ]
+        end
+    end
+
+    def get_checkin(mgr, checkin_id)
+        if checkin_id.nil?
+            mgr.checkin.db.order(:time).reverse.first
+        else
+            checkin = mgr.checkin.db.where( Sequel.like(:id, "#{checkin_id}%" ) ).first
+            if checkin
+                checkin
+            else
+                puts "Can't find checkin with id #{checkin_id}"
+                exit
+            end
+        end
+    end
+
+    def do_list_not_media_checkin(checkin_id)
+        mgr = local_mgr
+        mgr.checkin.repo.read_list( Storage::Uuid.new( get_checkin(mgr,checkin_id).id ) ) do |fh|
+            fh.each_line do |line|
+                info = line.strip.split( ' |<>| ' )
+                if info[2] == 'i'
+                    puts info[1]
+                end
+            end
+        end
+    end
+
+    def do_list_error_checkin(checkin_id)
+        mgr = local_mgr
+        mgr.checkin.repo.read_meta( Storage::Uuid.new( get_checkin(mgr,checkin_id).id ) )["error_items"].each do |it|
+            puts it
+        end
+    end
+
+    def do_info_checkin(checkin_id)
+        mgr = local_mgr
+        checkin = OpenStruct.new( mgr.checkin.repo.read_meta( Storage::Uuid.new( get_checkin(mgr,checkin_id).id ) ) )
+        checkin[:id] = checkin.uuid
+        print_checkin_summary(checkin)
+    end
+
+    def do_view
+        Global.create_inst(local_repo_path)
+        Global.inst.run
+    end
+
+    def do_scan_create_time(media_path)
+        count = 0
+        Find.find( media_path ) do |entry|
+            if File.file?( entry )
+                file_info = Ruiheng::FileInfo.new( entry )
+                if ( file_info.image? || file_info.video? )
+                    if !file_info.thumbnail?
+                        if  !file_info.create_time
+                            puts " #{entry} ==== #{Ruiheng::FileInfo.new( entry ).create_time}"
+                        end
+                    end
+                end
+                count += 1
+                if count % 100 == 0
+                    puts "scan #{count} files"
+                end
+            else
+                if entry.split("/").length == 2 
+                    puts entry
+                end
+            end
+        end
+    end
+
+    def do_detect_create_time(media_path)
+        puts " #{media_path} ==== #{Ruiheng::FileInfo.new( media_path ).create_time}"
+    end
+
+    def do_datefix
+        regex = Regexp.new ARGV[1]
+        mgr = local_mgr
+        mgr.media.db.filter(:year=>nil).all.each do |media|
+            md = File.basename( media.file_path ).match( regex )
+            new_time = DateTime.new( md[:year].to_i, md[:month].to_i, md[:day].to_i, md[:hour].to_i, md[:min].to_i, md[:second].to_i )
+            puts "%s => %s" % [ File.basename( media.file_path ), new_time ]
+            if !@config[:readonly]
+                media.update( :create_time=>new_time )
+            end
+        end
+    end
+
+    def do_datecheck
+        mgr = local_mgr
+        mgr.media.db.filter(:year=>nil).all.each do |media|
+            puts "%s: file:%s\tmodify time: %s\tcreate time:%s" % [ media.id, File.basename( media.file_path ), media.modify_time, media.create_time ]
+        end
+    end
+
+    def check(path,target_path)
+        mgr = local_mgr
+
+        path = Pathname.new(path)
+
+        if target_path
+            target_path = Pathname.new( target_path ) + path.basename
+        end
+
+
+        path.find do |entry|
+            if entry.file?
+                if mgr.media.check( entry.to_path )
+                    if target_path
+                        target_file = target_path.join( entry.relative_path_from( path ) )
+                        if !target_file.dirname.exist?
+                            target_file.dirname.mkpath
+                        end
+                        puts "mv %s to %s" % [ entry.to_path, target_file.to_path ]
+                        entry.rename(target_file)
+                    end
+                end
+            end
+        end
+    end
+
+    def do_backup_make_media(backup_id, part_number, dest_path)
+        mgr = local_mgr
+        backup = mgr.db.backup[backup_id]
+        raise "Invalid backup id #{backup_id}" if backup.nil?
+        raise "Invalid part num #{part_number}" if part_number < 0 || part_number >=backup[:part_number]
+
+        mgr.write_backup_part_to_path( backup, part_number, dest_path )
+    end
+
+
+    def parse_size(str)
+        case str
+        when 'dual-dvd'
+            9.2 * 1024 * 1024 * 1024 
+        when 'dvd'
+            4.6 * 1024 * 1024 * 1024 
+        when 'vcd'
+            640 * 1024 * 1024
+        else
+            md = str.match RegSize           
+            if md.nil?
+                puts "Unknown size spec #{str}"
+                exit
+            end
+            md[:size].to_f * 1024 * 1024 * 0.95
+        end
+    end
+
+    def do_real_backup
+        mgr = local_mgr
+        if ARGV[2].nil?
+            puts "Must provide plan uuid"
+            exit
+        end
+        plan = local_mgr.db.backup_plan.where(Sequel.like( :id, ARGV[2] + '%' )).first
+        if plan.nil?
+            puts "Can't find plan for id #{ARGV[1]}."
+            exit
+        end
+
+        sizes = [1024 * 1024 * 1024 * 1024]
+        if ARGV[3]
+            sizes = ARGV[3].split(',').map { |s| parse_size(s) }
+        end
+
+        mgr.backup_for_plan( plan.id, sizes )
+    end
+
+    #BackupHelp = <<__END__
+    #backup support following function:
+    #backup list-plan -- display all the plans
+    #backup info [plan-id]   --- show all the information about spefic plan
+    #backup create [plan-id] [size:,separator size define, support: vcd, dvd, 34M. if contains multiple, please seperate by comma and wrap with ""]
+    #backup list  -- display all the backup information
+    #backup make-media [backup_id] [part_num] [dest_path]
+    #__END__
+
+    def do_backup_help
+        puts BackupHelp 
+    end
+
+
+    def local_repo_path
+        if params['local'].given?
+            @config[:local_repo] = params['local'].value
+        end
+
+        if @config[:local_repo].nil?
+            puts "Must specify local repo by -l/--local or config file ~/.ruiheng/config.json"
+        end
+
+        puts "Repo path #{@config[:local_repo]}"
+        ensure_repo_exist( @config[:local_repo] )
+        @config[:local_repo]
+    end
+
+    def local_mgr
+        @local_mgr = @local_mgr || MediaMgr.new( local_repo_path )
+    end
+
+    def do_backup_list_plan
+        local_mgr.db.backup_plan.all.each do |plan|
+            puts "%s   %s" % [ plan.id, plan.name ]
+        end
+    end
+
+    def do_backup_list
+        local_mgr.db.backup.order(:id).reverse.all.each do |backup|
+            puts "%d: num:%d  plan:%s" % [ backup.id, backup[:part_number], backup.backup_plan[:name] ]
+        end
+    end
+
+    def do_backup_create_plan
+        if ARGV[2].nil?
+            puts "Must provide plan name" 
+            exit
+        end
+
+        plan = local_mgr.create_backup_plan( ARGV[2] )
+        puts "Create backup plan id is %s and name is %s" % [ plan.id, plan.name ]
+    end
+
+    def rebuild
+        if File.exist? @config[:local_repo] + "/db/meta.db"
+            puts "Db file exists. Cannot rebuild"
+            exit
+        end
+
+        local_mgr.rebuild_db
+    end
+
+
+    def print_checkin_summary(checkin)
+        puts IMPORT_SUMMARY % [ checkin.id, checkin.src_path, checkin.total_count, checkin.added_count, checkin.added_repo_count, checkin.added_db_count, checkin.not_media_count, checkin.thumbnail_count, checkin.already_in_repo_count, checkin.error_count ]
+        puts 
+
+        checkin.error_items.each do |it|
+            puts it
+        end
+    end
+
+    def import
+        1.upto(ARGV.length - 1) do |i|
+            do_import(ARGV[i])
+        end
+    end
+
+    def do_import(path)
+        if !File.exist? path
+            puts "\"#{path}\" is not exists.Can not import it"
+        else
+            checkin = local_mgr.scan_and_import_media( path )
+            print_checkin_summary(checkin)
+        end
+    end
+
+    def sync(path)
+        ensure_repo_exist(path)
+        local_mgr.sync( MediaMgr.new( path ) )
+    end
+
+
+    name 'ruiheng'
+
+    option('local','l'){
+        argument :required
+        description 'the repo path'
+    }
+
+    mode('sync') do
+        argument('remote_path'){
+            required
+            description 'photo repo needed sync'
+        }
+
+        def run
+            sync(params['remote_path'].value)
+        end
+    end
+
+    mode('detect-create-time') do
+        argument('media_path' ) do
+            required
+            description 'media file path'
+        end
+
+        def run
+            do_detect_create_time(params['media_path'].value)
+        end
+    end
+
+    mode('scan-null-create-time') do
+        argument('media_path' ) do
+            required
+            description 'directory which store media files'
+        end
+
+        def run
+            do_scan_create_time(params['media_path'].value)
+        end
+    end
+
+    mode('import') do
+        def run
+            import
+        end
+    end
+
+    mode('check') do
+        argument('media_path' ) do
+            required
+            description 'directory which store media files'
+        end
+
+        option('move','m') do
+            required false
+            description "Move already backuped file to another folder"
+            argument_required
+            cast :string
+            validate{|path| File.directory? path}
+        end
+
+
+        def run
+            check(params['media_path'].value,params['move'].value)
+        end
+    end
+
+    mode('rebuild') do
+        def run
+            rebuild
+        end
+    end
+
+    mode('backup') do
+        mode('list') do
+            def run; do_backup_list; end
+        end
+
+        mode('list-plan') do
+            def run; do_backup_list_plan; end
+        end
+
+        mode('create-plan') do
+            def run; do_backup_create_plan; end
+        end
+
+        mode('info') do
+            def run; do_backup_info; end
+        end
+
+        mode('make-media') do
+            argument('backup_id') do
+                required
+                cast :int
+            end
+
+            argument('part_number') do
+                required
+                cast :int
+                description 'start from 0'
+            end
+
+            argment('dest_path') do
+                required
+            end
+
+            def run; do_backup_make_media(params['backup_id'].value, params['part_number'].value, params['dest_path'].value); end
+        end
+
+        mode('backup') do
+            def run; do_real_backup; end
+        end
+    end
+
+    mode('date-check') do
+        def run
+            do_datecheck
+        end
+    end
+
+    mode('date-from-name') do
+        def run
+            do_datefix
+        end
+    end
+
+    mode('ui') do
+        def run
+            do_view
+        end
+    end
+
+    mode('html') do
+        mode('generate') do
+            def run 
+                do_html_generate
+            end
+        end
+
+        mode('view') do
+            def run 
+                do_html_view
+            end
+        end
+    end
+
+    mode('checkin') do
+        mode('list') do
+            def run; do_list_checkin; end
+        end
+
+        mode('info') do
+            argument('checkin_id') do
+                required
+            end
+
+            def run; do_info_checkin(params['checkin_id'].value); end
+
+            mode('error') do
+                def run; do_list_error_checkin(params['checkin_id'].value); end
+            end
+
+            mode('not-media') do
+                def run; do_list_not_media_checkin(params['checkin_id'].value); end
+            end
+        end
+    end
+
+
+    mode('stat') do
+        def run
+            do_stat
+        end
+    end
+
+
+    mode('repo') do
+        mode('create') do
+            #do_create(ARGV[1].nil? ? @config[:local_repo] : ARGV[1])
+        end
+    end
+
+    mode('album') do
+        mode('list') do
+            def run
+                local_mgr.db.album.all.each do |album|
+                    puts "%s:%s:%s" % [ album.id, album.name, album.text ]
+                end
+            end
+        end
+
+        mode('create') do
+            argument('name') do
+                required
+            end
+
+            argument('text') do
+                default ""
+            end
+
+            def run
+                local_mgr.create_album( params["name"].value, params["text"].value )
+            end
+        end
+
+    end
+
+    mode('set-default-album')do
+        def run
+            local_mgr.set_default_album
+        end
+    end
+end
+

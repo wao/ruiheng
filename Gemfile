@@ -1,0 +1,11 @@
+source 'https://rubygems.org'
+
+gem 'handshake'
+gem 'test-unit'
+gem 'sequel'
+gem 'byebug'
+gem 'rmagick'
+gem 'mini_exiftool'
+gem 'mimemagic'
+gem 'gtk3'
+gem 'main'
