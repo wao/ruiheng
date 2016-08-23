@@ -53,7 +53,7 @@ class Global
     end
 
     def run
-        Gtk.init
+        #Gtk.init
         @main_window = Ui::Gtk3::MainWindow.new(SubGlobal.new(media_mgr, selection, media_mgr.default_album.medias_dataset))
         @main_window.show
         @main_window.hide_checks

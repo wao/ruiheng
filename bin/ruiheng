@@ -1,6 +1,9 @@
 #!/usr/bin/env ruby
 #vim:ft=ruby
 
+ENV['BUNDLE_GEMFILE']=File.dirname( File.realpath( __FILE__ ) ) + "/../Gemfile"
+require 'bundler/setup'
+
 $:.push File.dirname( File.realpath( __FILE__ ) ) + "/../lib"
 
 require 'optparse'
@@ -68,7 +71,7 @@ Main do
             opts.banner = "Usage: ruiheng [global options] command arguments"
             opts.separator ""
             opts.separator "Global options"
-            opts.on("-l", "--local [LOCAL REPO PATH]", "Local repo path. If not specified by config.json, it is needed to specified" ) do |path|
+            opts.on("-l", "--local [LOCAL REPO PATH]", "Local repo path. If not specified by ~/.ruiheng/config.json, it is needed to specified. For config.json, like {\"local_repo\":\"/home/xxxx/photorepo\"}" ) do |path|
                 @config[:local_repo] = path
                 ensure_repo_exist(path)
             end
@@ -390,10 +393,11 @@ Main do
 
 
     name 'ruiheng'
+    description 'A picture and video file manager. It can store a lot of picture into user specific folder.(which default is , but user can use --local or -l to specify it'
 
     option('local','l'){
         argument :required
-        description 'the repo path'
+        description "Local repo path. If not specified by ~/.ruiheng/config.json, it is needed to specified. For config.json, like {\"local_repo\":\"/home/xxxx/photorepo\"}" 
     }
 
     mode('sync') do
@@ -436,6 +440,8 @@ Main do
     end
 
     mode('check') do
+        description "Scan specified media_path to check if media files stored in it are already stored in repo. If user provided --move path_name, already backuped media file will be move to this new folder."
+
         argument('media_path' ) do
             required
             description 'directory which store media files'
