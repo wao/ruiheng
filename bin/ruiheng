@@ -172,7 +172,8 @@ Main do
     end
 
     def do_view
-        Global.create_inst(local_repo_path)
+        puts "local media path #{local_media_path}"
+        Global.create_inst(local_repo_path,local_media_path)
         Global.inst.run
     end
 
@@ -311,8 +312,11 @@ Main do
         puts BackupHelp 
     end
 
+    def local_media_path
+        local_base_path + '/repo'
+    end
 
-    def local_repo_path
+    def local_base_path
         if params['local'].given?
             @config[:local_repo] = params['local'].value
         end
@@ -326,8 +330,13 @@ Main do
         @config[:local_repo]
     end
 
+    def local_repo_path
+        local_base_path + "/data"
+    end
+
     def local_mgr
-        @local_mgr = @local_mgr || MediaMgr.new( local_repo_path )
+        puts "local media path #{local_media_path}"
+        @local_mgr = @local_mgr || MediaMgr.new( local_repo_path, local_media_path )
     end
 
     def do_backup_list_plan
@@ -399,6 +408,11 @@ Main do
         argument :required
         description "Local repo path. If not specified by ~/.ruiheng/config.json, it is needed to specified. For config.json, like {\"local_repo\":\"/home/xxxx/photorepo\"}" 
     }
+
+    #option('media_path', 'm' ){
+    #    argument :required
+    #    description "Path to store media data, used by try backup function" 
+    #}
 
     mode('sync') do
         argument('remote_path'){

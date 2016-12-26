@@ -3,3 +3,4 @@
 .yardoc
 /tmp
 tags
+.byebug_history

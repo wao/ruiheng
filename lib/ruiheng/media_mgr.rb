@@ -26,10 +26,15 @@ module Ruiheng
 
         include Sync::MediaMgr
 
-        def initialize(root_path)
+        def initialize(root_path, media_path=nil)
             @console = SimpleConsole.new
             @root_path = root_path
-            @repo_media = Repo::Media.new( @root_path + "/media" )
+            if media_path.nil?
+                @repo_media = Repo::Media.new( @root_path + "/media" )
+            else
+                @repo_media = Repo::Media.new( media_path + "/media" )
+            end
+
             @repo_checkin = Repo::Checkin.new( @root_path + "/checkin" )
             if File.exist?( @root_path + "/uuid" )
                 @uuid = Storage::Uuid.new( File.read( @root_path + "/uuid" ) )
@@ -55,7 +60,11 @@ module Ruiheng
             @album = MediaMgr::Items.new( @db.album, nil, @console )
             @backup_dbs = {}
 
-            @gabage = @root_path + "/gabage"
+            if media_path.nil?
+                @gabage = @root_path + "/gabage"
+            else
+                @gabage = media_path + "/gabage"
+            end
             if !File.exist? @gabage
                 FileUtils.mkdir_p @gabage
             end

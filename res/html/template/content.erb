@@ -1,5 +1,5 @@
 <% @mgr.db.media.filter( :year=>@year, :month=>@month, :day=>@day ).order(:create_time).all.each do |rec| %>
-    <% basepath = "../media/" + Storage::Md5sum.new(rec.id).to_path %>
+    <% basepath = "../../repo/media/" + Storage::Md5sum.new(rec.id).to_path %>
     <div class="col-xs-6 col-md-3">
         <a href="<%= basepath %>/media_data" class="thumbnail"><img src="<%= basepath %>/thumb" /></a>
     </div>

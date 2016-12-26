@@ -35,8 +35,8 @@ class Global
 
     attr_reader :builder, :media_mgr
 
-    def initialize(repo_path)
-        @media_mgr = Ruiheng::MediaMgr.new( repo_path )
+    def initialize(repo_path,media_path)
+        @media_mgr = Ruiheng::MediaMgr.new( repo_path, media_path )
     end
 
     def selection
@@ -48,8 +48,8 @@ class Global
         @inst
     end
 
-    def self.create_inst(repo_path)
-        @inst = Global.new(repo_path)
+    def self.create_inst(repo_path, media_path)
+        @inst = Global.new(repo_path, media_path)
     end
 
     def run
