@@ -46,7 +46,7 @@ Main do
 
     def load_rc
         if File.exist? RC_FILE_PATH 
-            JSON.load( File.read( RC_FILE_PATH ), nil, {:symbolize_names=>true} )
+            JSON.load( File.read( RC_FILE_PATH ), nil, {:symbolize_names=>true, :create_additions=>false} )
         else
             {}
         end
@@ -65,40 +65,6 @@ Main do
             #end
         end
     end
-
-    def parse(args)
-        opt_parse = OptionParser.new do |opts|
-            opts.banner = "Usage: ruiheng [global options] command arguments"
-            opts.separator ""
-            opts.separator "Global options"
-            opts.on("-l", "--local [LOCAL REPO PATH]", "Local repo path. If not specified by ~/.ruiheng/config.json, it is needed to specified. For config.json, like {\"local_repo\":\"/home/xxxx/photorepo\"}" ) do |path|
-                @config[:local_repo] = path
-                ensure_repo_exist(path)
-            end
-
-            opts.on("--dry-run", "Doesn't really modify repo") do 
-                @config[:readonly] = true
-            end
-
-
-            opts.separator ""
-            opts.separator "Common options"
-            opts.on("-h", "--help", "Print this message." ) do 
-                puts opts
-                puts "Support command: sync import check rebuild backup"
-                exit
-            end
-        end
-
-        opt_parse.parse!(args)
-
-        if args.empty?
-            puts opt_parse
-            puts "Support command: sync import check rebuild backup"
-            exit
-        end
-    end
-
 
     def do_create(path)
         if File.exist? path
@@ -122,7 +88,8 @@ Main do
     end
 
     def do_html_view
-        system( "firefox %s" % [ Dir[@config[:local_repo]+"/www/*.html"][0] ] )
+        cmd = "xdg-open %s" % [ Dir[@config[:local_repo]+"/data/www/*.html"][0] ] 
+        system( cmd )
     end
 
     def do_list_checkin
