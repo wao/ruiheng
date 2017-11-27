@@ -420,6 +420,47 @@ Main do
         end
     end
 
+    mode('include') do
+      description "Check if another repo's all picture is fully included into this repo"
+
+      argument('other_repo_path') do
+        required
+        description "Path to other repo"
+        validate{|path| File.directory? path}
+      end
+
+      def run
+        other_base_path = params['other_repo_path'].value
+        other_repo_path = other_base_path + "/data"
+        other_media_path = other_base_path + "/repo/media"
+
+        if File.exists?( other_base_path + "/db/meta.db" ) && File.exists?( other_media_path ) 
+          other_repo_path = other_base_path 
+        elsif !( File.exists?(other_repo_path) && File.exists?(other_media_path) && File.exists?(other_repo_path+"/db/meta.db" ))
+          raise "Invalid other repo path"
+        end
+
+        other_media_mgr = MediaMgr.new( other_repo_path, local_media_path )
+
+        local_set = local_mgr.media.db.select(:id).map{ |i| i.id }.to_set
+        other_set = other_media_mgr.media.db.select(:id).map{ |i| i.id }.to_set
+        
+        if other_set.subset? local_set
+          puts "Ok"
+        else
+          # byebug
+          media = Repo::Media.new( other_media_path )
+          ( other_set - local_set ).each do |i|
+            # puts other_media_mgr.media.db[i.id].file_path
+            puts media.media_path(Storage::Md5sum.new(i.id))
+            if File.exists? media.media_path(Storage::Md5sum.new(i.id))
+              system( "eom #{media.media_path(Storage::Md5sum.new(i.id))}" )
+            end
+          end
+        end
+      end
+    end
+
     mode('check') do
         description "Scan specified media_path to check if media files stored in it are already stored in repo. If user provided --move path_name, already backuped media file will be move to this new folder."
 
